@@ -1,0 +1,12 @@
+# --- Dependencies ---
+node_modules/
+
+# --- Configs & Secrets ---
+.env
+npm/
+
+# --- OS/Editor Files ---
+.DS_Store
+.vscode/
+.idea/
+*.log

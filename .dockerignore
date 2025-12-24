@@ -1,0 +1,24 @@
+# --- Node Dependencies & Logs ---
+node_modules
+npm-debug.log
+yarn-error.log
+
+# --- Git & Config ---
+.git
+.gitignore
+.env
+.dockerignore
+
+# --- Docker Configs ---
+# keep these out of the image to keep it clean
+docker-compose.yml
+Dockerfile
+
+# --- Ignore Nginx Proxy Manager Data ---
+npm
+
+# --- OS & Editor Junk ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

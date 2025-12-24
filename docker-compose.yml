@@ -1,0 +1,21 @@
+services:
+  whois-service:
+    build: .
+#    image: ghcr.io/buildplan/dns-service:latest
+    container_name: whois-service
+    restart: unless-stopped
+    user: "node"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M

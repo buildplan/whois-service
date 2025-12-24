@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiredAlter WHOIS Lookup</title>
+    <meta name="description" content="Free WHOIS lookup tool. Check domain registration, expiry, ASN, and network details.">
+    
+    <meta property="og:image" content="https://whois.wiredalter.com/preview-image.png">
+
+    <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon/android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon/android-chrome-512x512.png">
+    <link rel="manifest" href="/favicon/site.webmanifest">
+    <!--
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 100'><rect width='140' height='100' rx='20' fill='%233b82f6'/><text x='70' y='70' font-family='sans-serif' font-size='45' font-weight='bold' fill='white' text-anchor='middle'>WHOIS</text><circle cx='125' cy='65' r='7' fill='%23ef4444'/></svg>">
+    -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .search-input { background: rgba(15, 23, 42, 0.8); transition: all 0.2s; }
+        .search-input:focus { background: rgba(30, 41, 59, 1); border-color: #3b82f6; outline: none; }
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        #toast {
+            visibility: hidden; min-width: 250px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 8px; padding: 12px 16px; position: fixed; z-index: 100; left: 50%; bottom: 30px; transform: translateX(-50%); border: 1px solid rgba(59, 130, 246, 0.5); opacity: 0; transition: opacity 0.3s, bottom 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body class="bg-[#0b1120] text-slate-300 min-h-screen flex flex-col">
+
+    <div id="toast">Notification</div>
+
+    <nav class="absolute top-0 left-0 w-full p-4 md:p-6 flex flex-col md:flex-row justify-between items-center z-10 gap-4">
+        <div class="flex flex-col md:flex-row items-center gap-4 md:gap-6 w-full md:w-auto">
+            <div class="text-2xl font-bold tracking-tight text-white">
+                WHOIS<span class="text-red-500">.</span><span class="text-blue-500">WiredAlter</span>
+            </div>
+
+            <div class="flex gap-1 bg-slate-800/50 rounded-lg p-1 border border-slate-700/50 backdrop-blur-sm">
+                <a href="https://ip.wiredalter.com" class="px-3 py-1.5 text-xs md:text-sm font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-all">IP</a>
+                <a href="https://dns.wiredalter.com" class="px-3 py-1.5 text-xs md:text-sm font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-all">DNS</a>
+                <a href="#" class="px-3 py-1.5 text-xs md:text-sm font-medium rounded-md text-white bg-blue-600 shadow-sm cursor-default">WHOIS</a>
+            </div>
+        </div>
+
+        <div class="flex gap-4 text-xs md:text-sm text-slate-500 font-medium">
+            <a href="/terms" class="hover:text-slate-300 transition-colors">Terms</a>
+            <span class="text-slate-700">|</span>
+            <a href="https://github.com/buildplan" class="hover:text-slate-300 transition-colors">GitHub</a>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-28 md:py-24 w-full space-y-10">
+
+        <div class="text-center space-y-6 mt-4 md:mt-0">
+            <div class="space-y-2">
+                <h1 class="text-4xl md:text-6xl font-bold text-white tracking-tighter">WHOIS <span class="text-blue-500">Lookup</span></h1>
+                <p class="text-lg md:text-xl text-slate-400">Deep registration data for Domains, IPs, and ASNs.</p>
+            </div>
+
+            <div class="relative max-w-lg mx-auto mt-6">
+                <input type="text" id="queryInput" class="block w-full p-4 pl-6 text-sm text-white border border-slate-700 rounded-xl search-input placeholder-slate-500" placeholder="domain.com, 1.1.1.1, or AS13335" onkeydown="if(event.key === 'Enter') lookup()">
+                <button onclick="lookup()" id="searchBtn" class="text-white absolute right-2.5 top-2.5 bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-800 font-medium rounded-lg text-sm px-4 py-2 transition-all">Search</button>
+            </div>
+        </div>
+
+        <div id="error-msg" class="hidden text-center text-red-400 bg-red-900/10 p-4 rounded-xl border border-red-900/30"></div>
+
+        <div id="results" class="hidden space-y-6">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="glass-panel p-5 rounded-xl space-y-2">
+                    <div class="text-blue-400 text-xs font-bold uppercase tracking-wider">Registrar</div>
+                    <div id="res-registrar" class="text-white font-mono text-sm truncate">...</div>
+                </div>
+                <div class="glass-panel p-5 rounded-xl space-y-2">
+                    <div class="text-blue-400 text-xs font-bold uppercase tracking-wider">Expiry Date</div>
+                    <div id="res-expires" class="text-white font-mono text-sm">...</div>
+                </div>
+            </div>
+
+            <div id="dns-container" class="glass-panel p-6 rounded-xl space-y-4 hidden">
+                <div class="flex justify-between items-center border-b border-slate-700/50 pb-3">
+                    <div class="text-green-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> 
+                        Resolved IP Addresses
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4">
+                    <div id="ipv4-section" class="hidden">
+                        <div class="flex items-start gap-3">
+                            <span class="px-2 py-1 rounded bg-blue-900/30 text-blue-400 text-xs font-mono border border-blue-900/50 mt-0.5">IPv4</span>
+                            <div id="ipv4-list" class="flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+
+                    <div id="ipv6-section" class="hidden">
+                        <div class="flex items-start gap-3">
+                            <span class="px-2 py-1 rounded bg-purple-900/30 text-purple-400 text-xs font-mono border border-purple-900/50 mt-0.5">IPv6</span>
+                            <div id="ipv6-list" class="flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-6 rounded-xl space-y-3">
+                <div class="flex justify-between items-center border-b border-slate-700/50 pb-3">
+                    <div class="text-slate-400 text-xs font-bold uppercase tracking-wider">Raw Output</div>
+                    <button onclick="copyRaw()" class="text-xs text-blue-500 hover:text-white transition-colors font-bold">COPY RAW</button>
+                </div>
+                <pre id="res-raw" class="font-mono text-xs text-slate-300 overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar leading-relaxed"></pre>
+            </div>
+
+        </div>
+
+        <div class="space-y-4 pt-8 border-t border-slate-800/60">
+            <h3 class="text-lg font-bold text-white">CLI Access</h3>
+            <div class="bg-[#0f172a] rounded-xl p-5 font-mono text-sm border border-slate-800 space-y-6">
+                <div>
+                    <div class="text-xs text-slate-500 mb-2 font-sans font-semibold uppercase tracking-wider">Text Report</div>
+                    <div class="group cursor-pointer" onclick="copyText('cmd1')">
+                        <div class="flex justify-between items-center text-slate-300 hover:text-white transition-colors bg-slate-900/50 p-3 rounded-lg border border-slate-700/30">
+                            <code id="cmd1" class="truncate mr-4">$ curl https://whois.wiredalter.com/google.com</code>
+                            <span class="text-blue-500 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">COPY</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="border-t border-slate-800/60 bg-[#0b1120] py-8 text-center text-slate-600 text-sm">
+        <p>&copy; <span id="year"></span> WiredAlter WHOIS Service.</p>
+    </footer>
+
+    <script>
+        document.getElementById("year").innerText = new Date().getFullYear();
+
+        function showToast(message) {
+            const x = document.getElementById("toast");
+            x.innerText = message; x.className = "show";
+            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+        }
+
+        function copyText(id) {
+            navigator.clipboard.writeText(document.getElementById(id).innerText.replace('$ ', '')).then(() => showToast('Command Copied!'));
+        }
+
+        function copyRaw() {
+            navigator.clipboard.writeText(document.getElementById('res-raw').innerText).then(() => showToast('Raw Data Copied!'));
+        }
+
+        async function lookup() {
+            const query = document.getElementById('queryInput').value.trim();
+            if(!query) return;
+
+            const results = document.getElementById('results');
+            const errorMsg = document.getElementById('error-msg');
+            const dnsContainer = document.getElementById('dns-container');
+            const ipv4Section = document.getElementById('ipv4-section');
+            const ipv6Section = document.getElementById('ipv6-section');
+            const searchBtn = document.getElementById('searchBtn');
+            
+            // Reset UI
+            results.classList.add('hidden');
+            errorMsg.classList.add('hidden');
+            dnsContainer.classList.add('hidden');
+            ipv4Section.classList.add('hidden');
+            ipv6Section.classList.add('hidden');
+            document.getElementById('ipv4-list').innerHTML = '';
+            document.getElementById('ipv6-list').innerHTML = '';
+            
+            // Loading State
+            searchBtn.innerText = "Processing...";
+            searchBtn.disabled = true;
+            searchBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                const res = await fetch(`/api/lookup/${query}`);
+                const data = await res.json();
+
+                if(data.error) throw new Error(data.error);
+
+                // 1. Populate Registrar/Expiry
+                document.getElementById('res-registrar').innerText = data.parsed.registrar || 'Check Raw Output';
+                document.getElementById('res-expires').innerText = data.parsed.expires || 'Check Raw Output';
+                
+                // 2. Populate DNS/IPs (Enhanced)
+                let hasIPs = false;
+                
+                if (data.ips && data.ips.v4 && data.ips.v4.length > 0) {
+                    hasIPs = true;
+                    ipv4Section.classList.remove('hidden');
+                    data.ips.v4.forEach(ip => {
+                        const span = document.createElement('span');
+                        span.className = "font-mono text-sm text-slate-200 bg-slate-800/50 px-2 py-0.5 rounded border border-slate-700/50";
+                        span.innerText = ip;
+                        document.getElementById('ipv4-list').appendChild(span);
+                    });
+                }
+
+                if (data.ips && data.ips.v6 && data.ips.v6.length > 0) {
+                    hasIPs = true;
+                    ipv6Section.classList.remove('hidden');
+                    data.ips.v6.forEach(ip => {
+                        const span = document.createElement('span');
+                        span.className = "font-mono text-xs text-slate-300 bg-slate-800/50 px-2 py-0.5 rounded border border-slate-700/50 break-all";
+                        span.innerText = ip;
+                        document.getElementById('ipv6-list').appendChild(span);
+                    });
+                }
+
+                if (hasIPs) {
+                    dnsContainer.classList.remove('hidden');
+                }
+
+                // 3. Populate Raw Data
+                document.getElementById('res-raw').innerText = data.raw;
+
+                // Show Results
+                results.classList.remove('hidden');
+
+            } catch (err) {
+                errorMsg.innerText = err.message || "Lookup Failed";
+                errorMsg.classList.remove('hidden');
+            } finally {
+                // Reset Button
+                searchBtn.innerText = "Search";
+                searchBtn.disabled = false;
+                searchBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+    </script>
+</body>
+</html>
