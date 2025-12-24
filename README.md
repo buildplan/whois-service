@@ -77,6 +77,17 @@ curl https://whois.wiredalter.com/api/lookup/google.com
 }
 ```
 
+**Example Use Case (jq):**
+Extract just the expiry date or registrar using a tool like `jq`:
+
+```bash
+# Get just the expiry date
+curl -s https://whois.wiredalter.com/api/lookup/google.com | jq .parsed.expires
+
+# Get the Registrar
+curl -s https://whois.wiredalter.com/api/lookup/google.com | jq .parsed.registrar
+```
+
 ## Installation (Self-Hosted)
 
 1. **Clone the repository:**
