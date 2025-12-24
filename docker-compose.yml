@@ -1,7 +1,7 @@
 services:
   whois-service:
-    build: .
-#    image: ghcr.io/buildplan/dns-service:latest
+#    build: .
+    image: ghcr.io/buildplan/whois-service:latest
     container_name: whois-service
     restart: unless-stopped
     user: "node"
