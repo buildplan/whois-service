@@ -147,13 +147,13 @@
                 </div>
                 <pre id="res-raw" class="font-mono text-xs text-slate-300 overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar leading-relaxed"></pre>
             </div>
-
         </div>
 
-        <div class="space-y-4 pt-8 border-t border-slate-800/60">
+	<div class="space-y-4 pt-8 border-t border-slate-800/60">
             <h3 class="text-lg font-bold text-white">CLI Access</h3>
-            <div class="bg-[#0f172a] rounded-xl p-5 font-mono text-sm border border-slate-800 space-y-6">
-                <div>
+            <div class="bg-[#0f172a] rounded-xl p-5 font-mono text-sm border border-slate-800">
+                
+                <div class="mb-6"> 
                     <div class="text-xs text-slate-500 mb-2 font-sans font-semibold uppercase tracking-wider">Text Report</div>
                     <div class="group cursor-pointer" onclick="copyText('cmd1')">
                         <div class="flex justify-between items-center text-slate-300 hover:text-white transition-colors bg-slate-900/50 p-3 rounded-lg border border-slate-700/30">
@@ -162,6 +162,16 @@
                         </div>
                     </div>
                 </div>
+
+                <div>
+                    <div class="text-xs text-slate-500 mb-2 font-sans font-semibold uppercase tracking-wider">JSON Data</div>
+                    <div class="group cursor-pointer" onclick="copyText('cmd2')"> <div class="flex justify-between items-center text-slate-300 hover:text-white transition-colors bg-slate-900/50 p-3 rounded-lg border border-slate-700/30">
+                            <code id="cmd2" class="truncate mr-4">$ curl https://whois.wiredalter.com/api/lookup/google.com</code>
+                            <span class="text-blue-500 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">COPY</span>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
