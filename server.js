@@ -4,7 +4,7 @@ const whois = require('whois');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const util = require('util');
-const dns = require('dns').promises; // NATIVE DNS MODULE
+const dns = require('dns').promises;
 
 const app = express();
 const npmLookupPromise = util.promisify(whois.lookup);
@@ -32,6 +32,21 @@ function detectQueryType(query) {
     return 'unknown';
 }
 
+// --- EXTERNAL INTEGRATIONS ---
+
+// Fetch from IP Service
+async function getIpIntelligence(ip) {
+    try {
+        // Uses Node 18+ native fetch
+        const res = await fetch(`https://ip.wiredalter.com/api/info?ip=${ip}`);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        // Fail silently so we don't break the WHOIS lookup
+        return null;
+    }
+}
+
 // --- DNS LOOKUP HELPER ---
 async function getDNS(domain) {
     try {
@@ -49,19 +64,16 @@ async function getDNS(domain) {
 }
 
 // --- CORE WHOIS FUNCTIONS ---
-
 function lookupLinux(query, server = null) {
     return new Promise((resolve, reject) => {
         if (!/^[a-zA-Z0-9.:-]+$/.test(query)) return reject(new Error("Invalid characters"));
 
-        // Timeout 10s
         const cmd = server ? `whois -h ${server} "${query}"` : `whois "${query}"`;
         console.log(`[DEBUG] Executing: ${cmd}`);
 
         exec(cmd, { timeout: 10000 }, (error, stdout, stderr) => {
             const output = (stdout || '') + (stderr || '');
 
-            // STRICT NETWORK ERROR DETECTION
             if (output.includes("Name or service not known") ||
                 output.includes("Temporary failure") ||
                 output.includes("Connection refused") ||
@@ -78,32 +90,20 @@ function lookupLinux(query, server = null) {
 async function lookupDeep(query) {
     try {
         const tld = query.split('.').pop();
-        // 1. Ask IANA
         const ianaRaw = await lookupLinux(tld, 'whois.iana.org');
-
-        // 2. Find Referral
         const match = ianaRaw.match(/refer:\s*([^\s\n]+)/i);
 
         if (match && match[1]) {
             const realServer = match[1];
-            console.log(`[DEBUG] IANA referral for .${tld} -> ${realServer}`);
-
-            // 3. Try Referral (Return IANA data if Referral fails)
             try {
                 return await lookupLinux(query, realServer);
             } catch (referralErr) {
-                console.warn(`[WARN] Referral ${realServer} failed. Returning IANA data.`);
                 return `[WARNING: Registry server ${realServer} is unreachable]\n[Showing IANA Registry Data:]\n\n${ianaRaw}`;
             }
         }
-
-        // 4. Fallback: If IANA has data but no referral, return IANA data
         if (ianaRaw.length > 50) return ianaRaw;
-
         throw new Error("No referral found");
-    } catch (e) {
-        throw e;
-    }
+    } catch (e) { throw e; }
 }
 
 async function lookupNPM(query) {
@@ -112,29 +112,24 @@ async function lookupNPM(query) {
     return await npmLookupPromise(query, options);
 }
 
-// --- MASTER CONTROLLER (Graceful) ---
+// --- MASTER CONTROLLER ---
 async function robustLookup(query) {
     let rawData = null;
     let methodUsed = 'Linux Binary';
 
     try {
-        // Attempt 1
         rawData = await lookupLinux(query);
     } catch (err1) {
         try {
-            // Attempt 2 (Deep) - Only for domains
             if (detectQueryType(query) === 'domain') {
                 rawData = await lookupDeep(query);
                 methodUsed = 'Deep Discovery (IANA)';
             } else { throw new Error(); }
         } catch (err2) {
              try {
-                // Attempt 3 (NPM)
                 rawData = await lookupNPM(query);
                 methodUsed = 'NPM Library (Fallback)';
              } catch (err3) {
-                // FINAL FALLBACK: Don't crash. Return null so we can show DNS data.
-                console.error(`[ERROR] All WHOIS methods failed for ${query}`);
                 return { rawData: null, methodUsed: 'Failed' };
              }
         }
@@ -153,10 +148,11 @@ app.get('/api/lookup/:query', async (req, res) => {
 
     const start = Date.now();
 
-    // PARALLEL EXECUTION: Run WHOIS and DNS at the same time
-    const [whoisResult, dnsResult] = await Promise.all([
+    // PARALLEL EXECUTION: WHOIS + DNS (if domain) + IP INTELLIGENCE (if IP)
+    const [whoisResult, dnsResult, ipInfoResult] = await Promise.all([
         robustLookup(query),
-        (type === 'domain') ? getDNS(query) : Promise.resolve(null)
+        (type === 'domain') ? getDNS(query) : Promise.resolve(null),
+        (type === 'ip') ? getIpIntelligence(query) : Promise.resolve(null)
     ]);
 
     const { rawData, methodUsed } = whoisResult;
@@ -187,10 +183,10 @@ app.get('/api/lookup/:query', async (req, res) => {
         method: methodUsed,
         timestamp: new Date().toISOString(),
         latency_ms: Date.now() - start,
-        // IF WHOIS FAILED, 'parsed' will be nulls, but 'ips' will have data!
         parsed: parsed,
         ips: dnsResult,
-        raw: rawData || "WHOIS Lookup failed or server unreachable. See IP/DNS data."
+        ip_info: ipInfoResult, // New Field
+        raw: rawData || "WHOIS Lookup failed or server unreachable."
     };
 
     if (isCli(ua)) {
@@ -207,23 +203,30 @@ app.get('/:query', async (req, res, next) => {
     const ua = req.headers['user-agent'];
     if (isCli(ua)) {
         const query = req.params.query;
-        // Parallel Lookup
-        const [whoisResult, dnsResult] = await Promise.all([
+        const [whoisResult, dnsResult, ipInfo] = await Promise.all([
             robustLookup(query),
-            (detectQueryType(query) === 'domain') ? getDNS(query) : Promise.resolve(null)
+            (detectQueryType(query) === 'domain') ? getDNS(query) : Promise.resolve(null),
+            (detectQueryType(query) === 'ip') ? getIpIntelligence(query) : Promise.resolve(null)
         ]);
 
         let output = `\n🔎 WHOIS Report: ${query}\n`;
         output += `------------------------------------------------\n`;
 
-        // SHOW DNS DATA FIRST
+        // Show IP Info if available
+        if (ipInfo) {
+            output += `Location: ${ipInfo.city}, ${ipInfo.country}\n`;
+            output += `Provider: ${ipInfo.org} (${ipInfo.asn})\n`;
+            if(ipInfo.is_proxy) output += `SECURITY WARNING: Identified as ${ipInfo.proxy_type}\n`;
+            output += `------------------------------------------------\n`;
+        }
+
         if (dnsResult) {
             if (dnsResult.v4.length > 0) output += `IPv4: ${dnsResult.v4.join(', ')}\n`;
             if (dnsResult.v6.length > 0) output += `IPv6: ${dnsResult.v6.join(', ')}\n`;
             output += `------------------------------------------------\n`;
         }
 
-        output += (whoisResult.rawData || "[WHOIS Data Unavailable - Registry may be offline]");
+        output += (whoisResult.rawData || "[WHOIS Data Unavailable]");
         output += `\n------------------------------------------------\n`;
         return res.send(output);
     }

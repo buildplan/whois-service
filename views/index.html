@@ -28,7 +28,6 @@
         .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .search-input { background: rgba(15, 23, 42, 0.8); transition: all 0.2s; }
         .search-input:focus { background: rgba(30, 41, 59, 1); border-color: #3b82f6; outline: none; }
-        /* Custom Scrollbar */
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
@@ -50,7 +49,6 @@
             <div class="text-2xl font-bold tracking-tight text-white">
                 WHOIS<span class="text-red-500">.</span><span class="text-blue-500">WiredAlter</span>
             </div>
-
             <div class="flex gap-1 bg-slate-800/50 rounded-lg p-1 border border-slate-700/50 backdrop-blur-sm">
                 <a href="https://ip.wiredalter.com" class="px-4 py-2 md:px-3 md:py-1.5 text-sm font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-all">IP</a>
                 <a href="https://dns.wiredalter.com" class="px-4 py-2 md:px-3 md:py-1.5 text-sm font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-all">DNS</a>
@@ -83,7 +81,7 @@
 
         <div id="results" class="hidden space-y-6">
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="domain-info-cards" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="glass-panel p-5 rounded-xl space-y-2">
                     <div class="text-blue-400 text-xs font-bold uppercase tracking-wider">Registrar</div>
                     <div id="res-registrar" class="text-white font-mono text-sm truncate">...</div>
@@ -94,6 +92,31 @@
                 </div>
             </div>
 
+            <div id="ip-intelligence" class="glass-panel p-6 rounded-xl space-y-4 hidden">
+                <div class="flex justify-between items-center border-b border-slate-700/50 pb-3">
+                    <div class="text-purple-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-purple-500"></span> 
+                        IP Intelligence
+                    </div>
+                    <span id="ip-flag" class="text-xl"></span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <div class="text-slate-500 text-xs uppercase mb-1">Provider (ISP)</div>
+                        <div id="ip-org" class="text-white font-medium">...</div>
+                        <div id="ip-asn" class="text-slate-400 text-sm font-mono mt-1">...</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 text-xs uppercase mb-1">Location</div>
+                        <div id="ip-loc" class="text-white font-medium">...</div>
+                        <div class="mt-2">
+                             <span id="ip-badge" class="px-2 py-0.5 rounded text-xs font-bold bg-slate-800 text-slate-400">...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="dns-container" class="glass-panel p-6 rounded-xl space-y-4 hidden">
                 <div class="flex justify-between items-center border-b border-slate-700/50 pb-3">
                     <div class="text-green-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
@@ -101,7 +124,6 @@
                         Resolved IP Addresses
                     </div>
                 </div>
-
                 <div class="grid grid-cols-1 gap-4">
                     <div id="ipv4-section" class="hidden">
                         <div class="flex items-start gap-3">
@@ -109,7 +131,6 @@
                             <div id="ipv4-list" class="flex flex-wrap gap-2"></div>
                         </div>
                     </div>
-
                     <div id="ipv6-section" class="hidden">
                         <div class="flex items-start gap-3">
                             <span class="px-2 py-1 rounded bg-purple-900/30 text-purple-400 text-xs font-mono border border-purple-900/50 mt-0.5">IPv6</span>
@@ -195,6 +216,8 @@
 
             const results = document.getElementById('results');
             const errorMsg = document.getElementById('error-msg');
+            const domainCards = document.getElementById('domain-info-cards');
+            const ipIntelligence = document.getElementById('ip-intelligence');
             const dnsContainer = document.getElementById('dns-container');
             const ipv4Section = document.getElementById('ipv4-section');
             const ipv6Section = document.getElementById('ipv6-section');
@@ -206,6 +229,9 @@
             dnsContainer.classList.add('hidden');
             ipv4Section.classList.add('hidden');
             ipv6Section.classList.add('hidden');
+            domainCards.classList.add('hidden');
+            ipIntelligence.classList.add('hidden');
+            
             document.getElementById('ipv4-list').innerHTML = '';
             document.getElementById('ipv6-list').innerHTML = '';
             
@@ -220,33 +246,56 @@
 
                 if(data.error) throw new Error(data.error);
 
-                document.getElementById('res-registrar').innerText = data.parsed.registrar || 'Check Raw Output';
-                document.getElementById('res-expires').innerText = data.parsed.expires || 'Check Raw Output';
-                
-                let hasIPs = false;
-                if (data.ips && data.ips.v4 && data.ips.v4.length > 0) {
-                    hasIPs = true;
-                    ipv4Section.classList.remove('hidden');
-                    data.ips.v4.forEach(ip => {
-                        const span = document.createElement('span');
-                        span.className = "font-mono text-sm text-slate-200 bg-slate-800/50 px-2 py-0.5 rounded border border-slate-700/50";
-                        span.innerText = ip;
-                        document.getElementById('ipv4-list').appendChild(span);
-                    });
-                }
+                // --- LOGIC: IP vs DOMAIN ---
+                if (data.type === 'ip' && data.ip_info) {
+                    // SHOW IP CARD
+                    ipIntelligence.classList.remove('hidden');
+                    const info = data.ip_info;
+                    
+                    document.getElementById('ip-org').innerText = info.org || 'N/A';
+                    document.getElementById('ip-asn').innerText = info.asn || '';
+                    document.getElementById('ip-loc').innerText = `${info.city}, ${info.country}`;
+                    document.getElementById('ip-flag').innerText = info.country === 'N/A' ? '' : getFlagEmoji(info.country); // You might need a flag function or just rely on text
 
-                if (data.ips && data.ips.v6 && data.ips.v6.length > 0) {
-                    hasIPs = true;
-                    ipv6Section.classList.remove('hidden');
-                    data.ips.v6.forEach(ip => {
-                        const span = document.createElement('span');
-                        span.className = "font-mono text-xs text-slate-300 bg-slate-800/50 px-2 py-0.5 rounded border border-slate-700/50 break-all";
-                        span.innerText = ip;
-                        document.getElementById('ipv6-list').appendChild(span);
-                    });
-                }
+                    const badge = document.getElementById('ip-badge');
+                    if (info.is_proxy) {
+                        badge.innerText = `⚠️ ${info.proxy_type}`;
+                        badge.className = "px-2 py-0.5 rounded text-xs font-bold bg-red-900/40 text-red-400 border border-red-800";
+                    } else {
+                        badge.innerText = `✓ ${info.usage_type || 'Clean'}`;
+                        badge.className = "px-2 py-0.5 rounded text-xs font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-800";
+                    }
 
-                if (hasIPs) dnsContainer.classList.remove('hidden');
+                } else {
+                    // SHOW DOMAIN CARDS
+                    domainCards.classList.remove('hidden');
+                    document.getElementById('res-registrar').innerText = data.parsed.registrar || 'Check Raw Output';
+                    document.getElementById('res-expires').innerText = data.parsed.expires || 'Check Raw Output';
+
+                    // SHOW RESOLVED IPs
+                    let hasIPs = false;
+                    if (data.ips && data.ips.v4 && data.ips.v4.length > 0) {
+                        hasIPs = true;
+                        ipv4Section.classList.remove('hidden');
+                        data.ips.v4.forEach(ip => {
+                            const span = document.createElement('span');
+                            span.className = "font-mono text-sm text-slate-200 bg-slate-800/50 px-2 py-0.5 rounded border border-slate-700/50";
+                            span.innerText = ip;
+                            document.getElementById('ipv4-list').appendChild(span);
+                        });
+                    }
+                    if (data.ips && data.ips.v6 && data.ips.v6.length > 0) {
+                        hasIPs = true;
+                        ipv6Section.classList.remove('hidden');
+                        data.ips.v6.forEach(ip => {
+                            const span = document.createElement('span');
+                            span.className = "font-mono text-xs text-slate-300 bg-slate-800/50 px-2 py-0.5 rounded border border-slate-700/50 break-all";
+                            span.innerText = ip;
+                            document.getElementById('ipv6-list').appendChild(span);
+                        });
+                    }
+                    if (hasIPs) dnsContainer.classList.remove('hidden');
+                }
 
                 document.getElementById('res-raw').innerText = data.raw;
                 results.classList.remove('hidden');
@@ -259,6 +308,16 @@
                 searchBtn.disabled = false;
                 searchBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
+        }
+        
+        // Simple Flag Emoji Helper
+        function getFlagEmoji(countryCode) {
+            if (!countryCode || countryCode.length !== 2) return '';
+            const codePoints = countryCode
+                .toUpperCase()
+                .split('')
+                .map(char =>  127397 + char.charCodeAt());
+            return String.fromCodePoint(...codePoints);
         }
     </script>
 </body>
