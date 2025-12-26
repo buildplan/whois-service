@@ -27,15 +27,10 @@ ENV PATH=/app/node_modules/.bin:$PATH
 # Copy dumb-init from builder
 COPY --from=builder /usr/bin/dumb-init /usr/bin/dumb-init
 
-# Copy whois and netbase binaries
+# Copy whois binary
 COPY --from=builder /usr/bin/whois /usr/bin/whois
-COPY --from=builder /usr/bin/getent /usr/bin/getent
 
-# Copy necessary shared libraries for whois (if needed)
-COPY --from=builder /lib/x86_64-linux-gnu/libidn2.so.0 /lib/x86_64-linux-gnu/
-COPY --from=builder /lib/x86_64-linux-gnu/libunistring.so.2 /lib/x86_64-linux-gnu/
-
-# Copy netbase data files
+# Copy netbase files
 COPY --from=builder /etc/protocols /etc/protocols
 COPY --from=builder /etc/services /etc/services
 
