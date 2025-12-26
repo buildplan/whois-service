@@ -14,6 +14,7 @@ A robust, tiered WHOIS intelligence API and web service. It provides deep regist
 ## Usage
 
 ### Web Interface
+
 Visit the homepage, [whois.wiredalter.com](https://whois.wiredalter.com) to search for any domain name manually.
 
 ### CLI / API Access
@@ -97,18 +98,65 @@ git clone https://github.com/buildplan/whois-service.git
 cd whois-service
 ```
 
-2. **Run with Docker:**
+**Run with Docker:**
 
-**Option 1: Quick Start**: Default Docker compose file in the repo uses pre-built image from GitHub registry `ghcr.io/buildplan/whois-service:latest`.
+**Quick Start**: Default Docker compose file in the repo uses pre-built image from GitHub registry `ghcr.io/buildplan/whois-service:latest`.
 
 ```bash
 docker compose up -d
 ```
 
-**Option 2: Build from Source**: To build the image locally (recommended for customization), edit `docker-compose.yml` to use `build: .`.
+**Build from Source**: To build the image locally, edit `docker-compose.yml` to use `build: .` instead of `image: ...`. This is useful if you want to modify the frontend (e.g., branding, colors, or layout).
 
-1. **Customize the UI (Optional):** You can edit `views/index.html` to change branding, colors, or layout.
-2. **Edit `docker-compose.yml`:**
+* **Customize the UI (Optional):** You can edit `views/index.html` to change the look and feel of the service before building.
+* **Docker Image Selection:** The `Dockerfile` uses [Docker Hardened Images](https://docs.docker.com/dhi/) for Node.js, which provide enhanced security with minimal CVEs and non-root execution. You have two options:
+
+**Option 1 (Recommended):** Login to `dhi.io` before building:
+
+```bash
+docker login dhi.io
+# Use your Docker Hub credentials
+
+docker compose up -d --build
+```
+
+**Option 2 (Standard Node):** Switch to the official Node image by changing `Dockerfile` to this:
+
+```Dockerfile
+# Use Node 24 LTS
+FROM node:24-slim
+
+# 1. OS SETUP (Run as Root)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    whois \
+    netbase \
+    dumb-init \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. PERMISSIONS SETUP
+WORKDIR /app
+RUN chown node:node /app
+
+# 3. SWITCH USER
+USER node
+
+# 4. DEPENDENCIES
+COPY --chown=node:node package*.json ./
+
+# npm ci
+RUN npm ci --omit=dev && npm cache clean --force
+
+# 5. APP CODE
+COPY --chown=node:node . .
+
+# 6. RUNTIME
+EXPOSE 3000
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["node", "server.js"]
+```
+
+**Edit `docker-compose.yml`:**
 
 ```yaml
 services:
