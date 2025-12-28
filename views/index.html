@@ -25,9 +25,9 @@
         .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .search-input { background: rgba(15, 23, 42, 0.8); transition: all 0.2s; }
         .search-input:focus { background: rgba(30, 41, 59, 1); border-color: #3b82f6; outline: none; }
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
         
         #toast {
@@ -51,6 +51,7 @@
                 <a href="https://ip.wiredalter.com" class="px-4 py-2 md:px-3 md:py-1.5 text-sm font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-all">IP</a>
                 <a href="https://dns.wiredalter.com" class="px-4 py-2 md:px-3 md:py-1.5 text-sm font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-all">DNS</a>
                 <a href="#" class="px-4 py-2 md:px-3 md:py-1.5 text-sm font-medium rounded-md text-white bg-blue-600 shadow-sm cursor-default">WHOIS</a>
+                <a href="https://audit.wiredalter.com" class="px-4 py-2 md:px-3 md:py-1.5 text-sm font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-all">AUDIT</a>
             </div>
         </div>
 
@@ -150,22 +151,27 @@
 	<div class="space-y-4 pt-8 border-t border-slate-800/60">
             <h3 class="text-lg font-bold text-white">CLI Access</h3>
             <div class="bg-[#0f172a] rounded-xl p-5 font-mono text-sm border border-slate-800">
-                
+
                 <div class="mb-6"> 
                     <div class="text-xs text-slate-500 mb-2 font-sans font-semibold uppercase tracking-wider">Text Report</div>
                     <div class="group cursor-pointer" onclick="copyText('cmd1')">
                         <div class="flex justify-between items-center text-slate-300 hover:text-white transition-colors bg-slate-900/50 p-3 rounded-lg border border-slate-700/30">
-                            <code id="cmd1" class="truncate mr-4">$ curl https://whois.wiredalter.com/google.com</code>
-                            <span class="text-blue-500 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">COPY</span>
+                            <code id="cmd1" class="font-mono text-sm mr-4 overflow-x-auto whitespace-nowrap min-w-0 flex-1 custom-scrollbar pb-2">
+                                $ curl https://whois.wiredalter.com/google.com
+                            </code>
+                            <span class="text-blue-500 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">COPY</span>
                         </div>
                     </div>
                 </div>
 
                 <div>
                     <div class="text-xs text-slate-500 mb-2 font-sans font-semibold uppercase tracking-wider">JSON Data</div>
-                    <div class="group cursor-pointer" onclick="copyText('cmd2')"> <div class="flex justify-between items-center text-slate-300 hover:text-white transition-colors bg-slate-900/50 p-3 rounded-lg border border-slate-700/30">
-                            <code id="cmd2" class="truncate mr-4">$ curl https://whois.wiredalter.com/api/lookup/google.com</code>
-                            <span class="text-blue-500 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">COPY</span>
+                    <div class="group cursor-pointer" onclick="copyText('cmd2')"> 
+                        <div class="flex justify-between items-center text-slate-300 hover:text-white transition-colors bg-slate-900/50 p-3 rounded-lg border border-slate-700/30">            
+                            <code id="cmd2" class="font-mono text-sm mr-4 overflow-x-auto whitespace-nowrap min-w-0 flex-1 custom-scrollbar pb-2">
+                                $ curl https://whois.wiredalter.com/api/lookup/google.com
+                            </code>
+                            <span class="text-blue-500 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">COPY</span>
                         </div>
                     </div>
                 </div>
