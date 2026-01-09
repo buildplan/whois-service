@@ -139,6 +139,9 @@ async function robustLookup(query) {
 
 // --- ROUTES ---
 
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
+app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, 'views', 'terms.html')));
+
 app.get('/api/lookup/:query', async (req, res) => {
     const query = req.params.query;
     const ua = req.headers['user-agent'];
@@ -232,9 +235,6 @@ app.get('/:query', async (req, res, next) => {
     }
     next();
 });
-
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
-app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, 'views', 'terms.html')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 WHOIS Service running on ${PORT}`));
