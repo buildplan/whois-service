@@ -305,8 +305,12 @@
         }
 
         async function lookup() {
-            const query = document.getElementById('queryInput').value.trim();
-            if(!query) return;
+            let queryInput = document.getElementById('queryInput').value.trim();
+            if(!queryInput) return;
+            let query = queryInput.replace(/^https?:\/\//i, '');
+            query = query.split('/')[0];
+            query = query.split('?')[0];
+            document.getElementById('queryInput').value = query;
 
             const results = document.getElementById('results');
             const errorMsg = document.getElementById('error-msg');
