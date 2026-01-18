@@ -1,4 +1,10 @@
 version: 2
+registries:
+  dhi-registry:
+    type: docker-registry
+    url: https://dhi.io
+    username: ${{ secrets.DOCKERHUB_USERNAME }}
+    password: ${{ secrets.DOCKERHUB_TOKEN }}
 updates:
   - package-ecosystem: "npm"
     directory: "/"
@@ -12,3 +18,5 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    registries:
+      - dhi-registry
