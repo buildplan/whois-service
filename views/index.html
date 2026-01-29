@@ -327,8 +327,8 @@
             typeLoop();
         }
 
-        // --- GEOJS ---
-        fetch('https://get.geojs.io/v1/ip/geo.json')
+        // --- CLIENT IP CHECK ---
+        fetch('https://ip.wiredalter.com/api/info')
             .then(res => res.json())
             .then(data => {
                 document.getElementById('my-ip').innerText = data.ip;
@@ -337,7 +337,7 @@
                 startPlaceholderAnimation(data.ip);
             })
             .catch(e => {
-                console.log('GeoJS check failed');
+                console.log('Client IP check failed (Likely network or ad-blocker)', e);
                 startPlaceholderAnimation(null);
             });
 
