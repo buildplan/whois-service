@@ -3,10 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WiredAlter WHOIS Lookup</title>
-    <meta name="description" content="Free WHOIS lookup tool. Check domain registration, expiry, ASN, and network details.">
-    
+
+    <title>WiredAlter WHOIS: Free Domain, ASN & IP Intelligence Lookup</title>
+
+    <meta name="description" content="Free WHOIS lookup tool. Instant check for domain registration, expiry dates, ASN, and network intelligence.">
+    <meta name="keywords" content="whois lookup, domain check, ip owner, asn lookup, domain expiry, developer api, wiredalter">
+    <meta name="author" content="WiredAlter">
+    <link rel="canonical" href="https://whois.wiredalter.com/">
+
+    <meta name="theme-color" content="#0b1120">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://whois.wiredalter.com/">
+    <meta property="og:title" content="WiredAlter WHOIS - Deep Network Intelligence">
+    <meta property="og:description" content="Instant domain, IP, and ASN lookup. Detects registrars, expiry, and network owners.">
+
     <meta property="og:image" content="https://whois.wiredalter.com/preview-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://whois.wiredalter.com/preview-image.png">
 
     <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
@@ -23,10 +37,23 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "WiredAlter WHOIS",
+      "url": "https://whois.wiredalter.com",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Any",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "description": "Professional WHOIS, ASN, and IP intelligence lookup tool."
+    }
+    </script>
+
     <style>
         html { scroll-behavior: smooth; }
         body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
-        
+
         /* --- GLASS PANEL (THEME AWARE) --- */
         .glass-panel { backdrop-filter: blur(12px); transition: all 0.3s; }
         
@@ -43,7 +70,6 @@
 
         /* --- SEARCH INPUT (THEME AWARE) --- */
         .search-input { transition: all 0.2s; }
-        
         html.dark .search-input { 
             background: rgba(15, 23, 42, 0.8); 
             border: 1px solid #334155; 
@@ -68,14 +94,12 @@
 
         /* --- SCROLLBARS --- */
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-        
         html.dark .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
         html.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
-
         html:not(.dark) .custom-scrollbar::-webkit-scrollbar-track { background: rgba(203, 213, 225, 0.5); }
         html:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
-        
+
         /* --- TOAST --- */
         #toast {
             visibility: hidden; min-width: 250px; text-align: center; border-radius: 8px; padding: 12px 16px; position: fixed; z-index: 100; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 14px; opacity: 0; transition: opacity 0.3s, bottom 0.3s;
@@ -106,7 +130,7 @@
         </div>
 
         <div class="absolute top-6 right-6 md:static flex items-center gap-4 text-sm font-medium text-slate-500">
-            
+
             <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all" aria-label="Toggle Theme">
                 <svg id="icon-sun" class="w-5 h-5 hidden dark:block text-slate-400 hover:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 <svg id="icon-moon" class="w-5 h-5 block dark:hidden text-slate-600 hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -130,15 +154,27 @@
             </div>
 
             <div class="relative max-w-lg mx-auto mt-8">
-                <input type="text" id="queryInput" class="block w-full p-4 pl-6 text-sm rounded-xl search-input placeholder-slate-400 dark:placeholder-slate-500 shadow-xl" placeholder="domain.com, 1.1.1.1, or AS13335" onkeydown="if(event.key === 'Enter') lookup()">
+                <input type="text" id="queryInput" class="block w-full p-4 pl-6 pr-24 text-sm rounded-xl search-input placeholder-slate-400 dark:placeholder-slate-500 shadow-xl" placeholder="domain.com" onkeydown="if(event.key === 'Enter') lookup()">
                 <button onclick="lookup()" id="searchBtn" class="text-white absolute right-2.5 top-2.5 bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-800 font-medium rounded-lg text-sm px-4 py-2 transition-all shadow-lg">Search</button>
             </div>
+        </div>
+
+        <div id="my-connection" class="hidden text-center mb-6 px-4">
+            <span class="inline-flex flex-wrap justify-center items-center gap-2 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-mono border border-blue-200 dark:border-blue-800 max-w-full">
+                <span class="relative flex h-2 w-2 shrink-0">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+                <span class="whitespace-nowrap">You are connecting from:</span>
+                <span id="my-ip" class="font-bold break-all">...</span>  
+                <span id="my-flag" class="shrink-0 text-lg ml-1"></span>
+            </span>
         </div>
 
         <div id="error-msg" class="hidden text-center text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/10 p-4 rounded-xl border border-red-200 dark:border-red-900/30"></div>
 
         <div id="results" class="hidden space-y-6">
-            
+
             <div id="domain-info-cards" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="glass-panel p-5 rounded-xl space-y-2">
                     <div class="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider">Registrar</div>
@@ -269,6 +305,42 @@
     <script>
         document.getElementById("year").innerText = new Date().getFullYear();
 
+        // --- Typewriter Placeholder ---
+        function startPlaceholderAnimation(userIp) {
+            const input = document.getElementById('queryInput');
+            const phrases = [ "Lookup a Domain: e.g. wiredalter.com", "Search an ASN: e.g. AS15169" ];
+            if (userIp) { const displayIp = userIp.length > 45 ? "your IPv6 address" : userIp; phrases.unshift(`Try your IP: ${displayIp}`); }
+            else { phrases.unshift("Lookup an IP: e.g. 1.1.1.1"); }
+            let phraseIndex = 0;
+            let charIndex = 0;
+            let isDeleting = false;
+            function typeLoop() {
+                if (input.value) { setTimeout(typeLoop, 2000); return; }
+                const currentPhrase = phrases[phraseIndex];
+                input.placeholder = currentPhrase.substring(0, charIndex);
+                let typeSpeed = 50; 
+                if (isDeleting) { typeSpeed = 25; charIndex--; } else { charIndex++; }
+                if (!isDeleting && charIndex === currentPhrase.length + 1) { typeSpeed = 2000; isDeleting = true; }
+                else if (isDeleting && charIndex === 0) { isDeleting = false; phraseIndex = (phraseIndex + 1) % phrases.length; typeSpeed = 500; }
+                setTimeout(typeLoop, typeSpeed);
+            }
+            typeLoop();
+        }
+
+        // --- GEOJS ---
+        fetch('https://get.geojs.io/v1/ip/geo.json')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('my-ip').innerText = data.ip;
+                document.getElementById('my-flag').innerText = getFlagEmoji(data.country_code); 
+                document.getElementById('my-connection').classList.remove('hidden');
+                startPlaceholderAnimation(data.ip);
+            })
+            .catch(e => {
+                console.log('GeoJS check failed');
+                startPlaceholderAnimation(null);
+            });
+
         // --- THEME LOGIC ---
         function initTheme() {
             if (localStorage.theme === 'light') {
@@ -307,6 +379,8 @@
         async function lookup() {
             let queryInput = document.getElementById('queryInput').value.trim();
             if(!queryInput) return;
+            
+            // Clean URL Logic
             let query = queryInput.replace(/^https?:\/\//i, '');
             query = query.split('/')[0];
             query = query.split('?')[0];
@@ -344,7 +418,7 @@
 
                 if(data.error) throw new Error(data.error);
 
-                // --- LOGIC: IP vs DOMAIN ---
+                // --- IP vs DOMAIN ---
                 if (data.type === 'ip' && data.ip_info) {
                     // SHOW IP CARD
                     ipIntelligence.classList.remove('hidden');
