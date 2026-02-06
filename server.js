@@ -6,6 +6,9 @@ const rateLimit = require('express-rate-limit');
 const util = require('util');
 const dns = require('dns').promises;
 
+// Force Node.js to use reliable upstream DNS
+dns.setServers(['1.1.1.1', "9.9.9.9", "208.67.222.222", "8.8.8.8"]);
+
 const app = express();
 const npmLookupPromise = util.promisify(whois.lookup);
 
@@ -33,21 +36,14 @@ function detectQueryType(query) {
 }
 
 // --- EXTERNAL INTEGRATIONS ---
-
-// Fetch from IP Service
 async function getIpIntelligence(ip) {
     try {
-        // Uses Node 18+ native fetch
         const res = await fetch(`https://ip.wiredalter.com/api/info?ip=${ip}`);
         if (!res.ok) return null;
         return await res.json();
-    } catch (e) {
-        // Fail silently so we don't break the WHOIS lookup
-        return null;
-    }
+    } catch (e) { return null; }
 }
 
-// --- DNS LOOKUP HELPER ---
 async function getDNS(domain) {
     try {
         const [a, aaaa] = await Promise.allSettled([
@@ -87,11 +83,11 @@ function lookupLinux(query, server = null) {
                     "no such domain", "no match for", "not found",
                     "domain not found", "no entries found", "no match"
                 ];
-                const isTooShort = cleanOut.length < 50;
+                const isTooShort = cleanOut.length < 65;
                 const hasFailureText = failurePhrases.some(p => cleanOut.includes(p));
 
                 if (isTooShort || hasFailureText) {
-                    console.log(`[DEBUG] Rejecting generic lookup for '${query}' (Length: ${cleanOut.length}, FailureText: ${hasFailureText}) -> Triggering Fallback`);
+                    console.log(`[DEBUG] Tier 1 Reject: '${query}' (Len: ${cleanOut.length})`);
                     return reject(new Error("Possible false negative - triggering fallback"));
                 }
             }
@@ -100,6 +96,17 @@ function lookupLinux(query, server = null) {
             resolve(output);
         });
     });
+}
+
+// Helper to resolve hostname to IP (Bypasses container DNS)
+async function resolveServerIP(hostname) {
+    try {
+        const ips = await dns.resolve4(hostname);
+        return ips[0]; // Return the first IP
+    } catch (e) {
+        console.log(`[DEBUG] Failed to resolve WHOIS server ${hostname}: ${e.message}`);
+        return hostname; // Fallback to hostname if resolution fails
+    }
 }
 
 async function lookupDeep(query) {
@@ -126,8 +133,10 @@ async function lookupDeep(query) {
             }
         }
 
-        console.log(`[DEBUG] Deep Lookup for '${query}' at '${realServer}'`);
-        return await lookupLinux(query, realServer);
+        const serverIP = await resolveServerIP(realServer);
+
+        console.log(`[DEBUG] Deep Lookup for '${query}' at '${realServer}' (${serverIP})`);
+        return await lookupLinux(query, serverIP);
 
     } catch (e) {
         console.log(`[DEBUG] Deep Lookup Failed: ${e.message}`);
@@ -156,6 +165,7 @@ async function robustLookup(query) {
             } else { throw new Error(); }
         } catch (err2) {
              try {
+                console.log("[DEBUG] Tier 2 failed, trying NPM fallback...");
                 rawData = await lookupNPM(query);
                 methodUsed = 'NPM Library (Fallback)';
              } catch (err3) {
@@ -167,7 +177,6 @@ async function robustLookup(query) {
 }
 
 // --- ROUTES ---
-
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
 app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, 'views', 'terms.html')));
 
@@ -180,7 +189,6 @@ app.get('/api/lookup/:query', async (req, res) => {
 
     const start = Date.now();
 
-    // PARALLEL EXECUTION: WHOIS + DNS (if domain) + IP INTELLIGENCE (if IP)
     const [whoisResult, dnsResult, ipInfoResult] = await Promise.all([
         robustLookup(query),
         (type === 'domain') ? getDNS(query) : Promise.resolve(null),
@@ -210,14 +218,10 @@ app.get('/api/lookup/:query', async (req, res) => {
     }
 
     const response = {
-        query,
-        type,
-        method: methodUsed,
+        query, type, method: methodUsed,
         timestamp: new Date().toISOString(),
         latency_ms: Date.now() - start,
-        parsed: parsed,
-        ips: dnsResult,
-        ip_info: ipInfoResult, // New Field
+        parsed, ips: dnsResult, ip_info: ipInfoResult,
         raw: rawData || "WHOIS Lookup failed or server unreachable."
     };
 
@@ -231,7 +235,6 @@ app.get('/api/lookup/:query', async (req, res) => {
 // CLI Text Report
 app.get('/:query', async (req, res, next) => {
     if (detectQueryType(req.params.query) === 'unknown') return next();
-
     const ua = req.headers['user-agent'];
     if (isCli(ua)) {
         const query = req.params.query;
@@ -243,21 +246,17 @@ app.get('/:query', async (req, res, next) => {
 
         let output = `\n🔎 WHOIS Report: ${query}\n`;
         output += `------------------------------------------------\n`;
-
-        // Show IP Info if available
         if (ipInfo) {
             output += `Location: ${ipInfo.city}, ${ipInfo.country}\n`;
             output += `Provider: ${ipInfo.org} (${ipInfo.asn})\n`;
             if(ipInfo.is_proxy) output += `SECURITY WARNING: Identified as ${ipInfo.proxy_type}\n`;
             output += `------------------------------------------------\n`;
         }
-
         if (dnsResult) {
             if (dnsResult.v4.length > 0) output += `IPv4: ${dnsResult.v4.join(', ')}\n`;
             if (dnsResult.v6.length > 0) output += `IPv6: ${dnsResult.v6.join(', ')}\n`;
             output += `------------------------------------------------\n`;
         }
-
         output += (whoisResult.rawData || "[WHOIS Data Unavailable]");
         output += `\n------------------------------------------------\n`;
         return res.send(output);
