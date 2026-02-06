@@ -1,10 +1,13 @@
 const express = require('express');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const whois = require('whois');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const util = require('util');
 const dns = require('dns').promises;
+
+// Force Node.js to use reliable upstream DNS
+dns.setServers(['1.1.1.1', "9.9.9.9", "208.67.222.222", "8.8.8.8"]);
 
 const app = express();
 const npmLookupPromise = util.promisify(whois.lookup);
@@ -13,6 +16,10 @@ const npmLookupPromise = util.promisify(whois.lookup);
 app.set('json spaces', 2);
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
+
+// In-Memory Cache - Stores results for 1 hour 
+const cache = new Map();
+const CACHE_DURATION = 60 * 60 * 1000; // 1 Hour
 
 app.use(express.static(path.join(__dirname, 'views'), { index: false }));
 
@@ -33,21 +40,14 @@ function detectQueryType(query) {
 }
 
 // --- EXTERNAL INTEGRATIONS ---
-
-// Fetch from IP Service
 async function getIpIntelligence(ip) {
     try {
-        // Uses Node 18+ native fetch
         const res = await fetch(`https://ip.wiredalter.com/api/info?ip=${ip}`);
         if (!res.ok) return null;
         return await res.json();
-    } catch (e) {
-        // Fail silently so we don't break the WHOIS lookup
-        return null;
-    }
+    } catch (e) { return null; }
 }
 
-// --- DNS LOOKUP HELPER ---
 async function getDNS(domain) {
     try {
         const [a, aaaa] = await Promise.allSettled([
@@ -68,10 +68,16 @@ function lookupLinux(query, server = null) {
     return new Promise((resolve, reject) => {
         if (!/^[a-zA-Z0-9.:-]+$/.test(query)) return reject(new Error("Invalid characters"));
 
-        const cmd = server ? `whois -h ${server} "${query}"` : `whois "${query}"`;
-        console.log(`[DEBUG] Executing: ${cmd}`);
+        const args = [];
+        args.push('--verbose');
+        if (server) {
+            args.push('-h', server);
+        }
+        args.push(query);
 
-        exec(cmd, { timeout: 10000 }, (error, stdout, stderr) => {
+        console.log(`[DEBUG] Executing: /usr/bin/whois ${args.join(' ')}`);
+
+        execFile('/usr/bin/whois', args, { timeout: 15000 }, (error, stdout, stderr) => {
             const output = (stdout || '') + (stderr || '');
 
             if (output.includes("Name or service not known") ||
@@ -81,29 +87,83 @@ function lookupLinux(query, server = null) {
                 return reject(new Error("Network/DNS Error"));
             }
 
+            if (!server) {
+                const cleanOut = output.trim().toLowerCase();
+                const failurePhrases = [
+                    "no such domain", "no match for", "not found",
+                    "domain not found", "no entries found", "no match"
+                ];
+                // 65 chars to catch short error messages
+                const isTooShort = cleanOut.length < 65;
+                const hasFailureText = failurePhrases.some(p => cleanOut.includes(p));
+
+                if (isTooShort || hasFailureText) {
+                    console.log(`[DEBUG] Tier 1 Reject: '${query}' (Len: ${cleanOut.length})`);
+                    return reject(new Error("Possible false negative - triggering fallback"));
+                }
+            }
+
             if (error && output.length < 20) return reject(error);
             resolve(output);
         });
     });
 }
 
+// Resolve hostname to IP to bypass container DNS issues
+async function resolveServerIP(hostname) {
+    try {
+        const ips = await dns.resolve4(hostname);
+        return ips[0];
+    } catch (e) {
+        console.log(`[DEBUG] Failed to resolve WHOIS server ${hostname}: ${e.message}`);
+        return hostname;
+    }
+}
+
 async function lookupDeep(query) {
     try {
-        const tld = query.split('.').pop();
-        const ianaRaw = await lookupLinux(tld, 'whois.iana.org');
-        const match = ianaRaw.match(/refer:\s*([^\s\n]+)/i);
+        const cleanQuery = query.toLowerCase();
 
-        if (match && match[1]) {
-            const realServer = match[1];
-            try {
-                return await lookupLinux(query, realServer);
-            } catch (referralErr) {
-                return `[WARNING: Registry server ${realServer} is unreachable]\n[Showing IANA Registry Data:]\n\n${ianaRaw}`;
+        // 1. UK Gov/Academic Override (Jisc)
+        if (cleanQuery.endsWith('.gov.uk') || cleanQuery.endsWith('.ac.uk')) {
+            console.log(`[DEBUG] Detected UK Public Sector. Routing to whois.ja.net...`);
+            const serverIP = await resolveServerIP('whois.ja.net');
+            return await lookupLinux(query, serverIP);
+        }
+
+        const tld = cleanQuery.split('.').pop();
+
+        // 2. Specific TLD Overrides
+        const MANUAL_SERVERS = {
+            'uk': 'whois.nic.uk', 'co': 'whois.nic.co', 'io': 'whois.nic.io',
+            'ai': 'whois.nic.ai', 'me': 'whois.nic.me', 'gov': 'whois.nic.gov',
+            'id': 'whois.pandi.or.id', 'org': 'whois.publicinterestregistry.net'
+        };
+
+        let realServer = MANUAL_SERVERS[tld];
+
+        // 3. IANA Fallback
+        if (!realServer) {
+            console.log(`[DEBUG] No override for .${tld}, asking IANA...`);
+            const ianaRaw = await lookupLinux(tld, 'whois.iana.org');
+            const match = ianaRaw.match(/refer:\s*([^\s\n]+)/i);
+
+            if (match && match[1]) {
+                realServer = match[1];
+            } else {
+                if (ianaRaw.length > 50) return ianaRaw;
+                throw new Error("No referral found in IANA response");
             }
         }
-        if (ianaRaw.length > 50) return ianaRaw;
-        throw new Error("No referral found");
-    } catch (e) { throw e; }
+
+        const serverIP = await resolveServerIP(realServer);
+        console.log(`[DEBUG] Deep Lookup for '${query}' at '${realServer}' (${serverIP})`);
+        return await lookupLinux(query, serverIP);
+
+    } catch (e) {
+        console.log(`[DEBUG] Deep Lookup Failed: ${e.message}`);
+        throw e;
+    }
 }
 
 async function lookupNPM(query) {
@@ -114,19 +174,33 @@ async function lookupNPM(query) {
 
 // --- MASTER CONTROLLER ---
 async function robustLookup(query) {
+    // Check Cache First
+    if (cache.has(query)) {
+        const cached = cache.get(query);
+        if (Date.now() - cached.timestamp < CACHE_DURATION) {
+            console.log(`[DEBUG] Serving '${query}' from cache`);
+            return cached.data;
+        }
+        cache.delete(query);
+    }
+
     let rawData = null;
     let methodUsed = 'Linux Binary';
 
     try {
+        // Tier 1: Standard Lookup
         rawData = await lookupLinux(query);
     } catch (err1) {
         try {
+            // Tier 2: Deep Lookup
             if (detectQueryType(query) === 'domain') {
                 rawData = await lookupDeep(query);
-                methodUsed = 'Deep Discovery (IANA)';
+                methodUsed = 'Deep Discovery (IANA/Manual)';
             } else { throw new Error(); }
         } catch (err2) {
              try {
+                // Tier 3: NPM Fallback
+                console.log("[DEBUG] Tier 2 failed, trying NPM fallback...");
                 rawData = await lookupNPM(query);
                 methodUsed = 'NPM Library (Fallback)';
              } catch (err3) {
@@ -134,11 +208,18 @@ async function robustLookup(query) {
              }
         }
     }
-    return { rawData, methodUsed };
+
+    const result = { rawData, methodUsed };
+
+    // [NEW] Save to Cache (only if successful)
+    if (rawData && rawData.length > 50) {
+        cache.set(query, { timestamp: Date.now(), data: result });
+    }
+
+    return result;
 }
 
 // --- ROUTES ---
-
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
 app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, 'views', 'terms.html')));
 
@@ -151,7 +232,6 @@ app.get('/api/lookup/:query', async (req, res) => {
 
     const start = Date.now();
 
-    // PARALLEL EXECUTION: WHOIS + DNS (if domain) + IP INTELLIGENCE (if IP)
     const [whoisResult, dnsResult, ipInfoResult] = await Promise.all([
         robustLookup(query),
         (type === 'domain') ? getDNS(query) : Promise.resolve(null),
@@ -181,14 +261,10 @@ app.get('/api/lookup/:query', async (req, res) => {
     }
 
     const response = {
-        query,
-        type,
-        method: methodUsed,
+        query, type, method: methodUsed,
         timestamp: new Date().toISOString(),
         latency_ms: Date.now() - start,
-        parsed: parsed,
-        ips: dnsResult,
-        ip_info: ipInfoResult, // New Field
+        parsed, ips: dnsResult, ip_info: ipInfoResult,
         raw: rawData || "WHOIS Lookup failed or server unreachable."
     };
 
@@ -202,7 +278,6 @@ app.get('/api/lookup/:query', async (req, res) => {
 // CLI Text Report
 app.get('/:query', async (req, res, next) => {
     if (detectQueryType(req.params.query) === 'unknown') return next();
-
     const ua = req.headers['user-agent'];
     if (isCli(ua)) {
         const query = req.params.query;
@@ -214,21 +289,17 @@ app.get('/:query', async (req, res, next) => {
 
         let output = `\n🔎 WHOIS Report: ${query}\n`;
         output += `------------------------------------------------\n`;
-
-        // Show IP Info if available
         if (ipInfo) {
             output += `Location: ${ipInfo.city}, ${ipInfo.country}\n`;
             output += `Provider: ${ipInfo.org} (${ipInfo.asn})\n`;
             if(ipInfo.is_proxy) output += `SECURITY WARNING: Identified as ${ipInfo.proxy_type}\n`;
             output += `------------------------------------------------\n`;
         }
-
         if (dnsResult) {
             if (dnsResult.v4.length > 0) output += `IPv4: ${dnsResult.v4.join(', ')}\n`;
             if (dnsResult.v6.length > 0) output += `IPv6: ${dnsResult.v6.join(', ')}\n`;
             output += `------------------------------------------------\n`;
         }
-
         output += (whoisResult.rawData || "[WHOIS Data Unavailable]");
         output += `\n------------------------------------------------\n`;
         return res.send(output);

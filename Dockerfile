@@ -3,12 +3,16 @@ FROM dhi.io/node:25-dev AS builder
 
 WORKDIR /usr/src/app
 
-# Install system dependencies (whois, netbase) and dumb-init
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     whois \
     netbase \
     dumb-init \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /staging/libs && \
+    cp /usr/lib/*-linux-gnu/libidn2.so.* /staging/libs/ && \
+    cp /usr/lib/*-linux-gnu/libunistring.so.* /staging/libs/
 
 # Install npm dependencies
 COPY package*.json ./
@@ -17,31 +21,31 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy app code
 COPY . .
 
-
 # === Final stage: Minimal runtime image ===
 FROM dhi.io/node:25
 
 ENV NODE_ENV=production
 ENV PATH=/app/node_modules/.bin:$PATH
 
-# Copy dumb-init from builder
+WORKDIR /app
+
+# Copy dumb-init
 COPY --from=builder /usr/bin/dumb-init /usr/bin/dumb-init
 
 # Copy whois binary
 COPY --from=builder /usr/bin/whois /usr/bin/whois
 
+# Copy the staged libraries to the system library path
+COPY --from=builder /staging/libs/ /usr/lib/
+
 # Copy netbase files
 COPY --from=builder /etc/protocols /etc/protocols
 COPY --from=builder /etc/services /etc/services
 
-# Copy application with dependencies from builder
+# Copy application
 COPY --from=builder --chown=node:node /usr/src/app /app
 
-WORKDIR /app
-
-# Expose port
 EXPOSE 3000
 
-# Start with dumb-init
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["node", "server.js"]
