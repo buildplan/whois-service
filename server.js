@@ -111,11 +111,18 @@ async function resolveServerIP(hostname) {
 
 async function lookupDeep(query) {
     try {
-        const tld = query.split('.').pop().toLowerCase();
+        const cleanQuery = query.toLowerCase();
+
+        if (cleanQuery.endsWith('.gov.uk') || cleanQuery.endsWith('.ac.uk')) {
+            console.log(`[DEBUG] Detected UK Public Sector domain. Routing to whois.ja.net...`);
+            const serverIP = await resolveServerIP('whois.ja.net');
+            return await lookupLinux(query, serverIP);
+        }
+
+        const tld = cleanQuery.split('.').pop();
         const MANUAL_SERVERS = {
-            'uk': 'whois.nic.uk', 'co': 'whois.nic.co', 'io': 'whois.nic.io',
-            'ai': 'whois.nic.ai', 'me': 'whois.nic.me', 'gov': 'whois.nic.gov',
-            'id': 'whois.pandi.or.id'
+            'uk': 'whois.nic.uk', 'co': 'whois.nic.co', 'io': 'whois.nic.io', 'ai': 'whois.nic.ai',
+            'me': 'whois.nic.me', 'gov': 'whois.nic.gov', 'id': 'whois.pandi.or.id', 'org': 'whois.publicinterestregistry.net'
         };
 
         let realServer = MANUAL_SERVERS[tld];
