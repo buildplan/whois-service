@@ -81,6 +81,14 @@ function lookupLinux(query, server = null) {
                 return reject(new Error("Network/DNS Error"));
             }
 
+            if (!server && (
+                output.toLowerCase().includes("no such domain") ||
+                output.toLowerCase().includes("no match for") ||
+                output.toLowerCase().includes("not found")
+            )) {
+                return reject(new Error("Possible false negative - triggering fallback"));
+            }
+
             if (error && output.length < 20) return reject(error);
             resolve(output);
         });
