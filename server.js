@@ -83,16 +83,10 @@ function lookupLinux(query, server = null) {
 
             if (!server) {
                 const cleanOut = output.trim().toLowerCase();
-
                 const failurePhrases = [
-                    "no such domain",
-                    "no match for",
-                    "not found",
-                    "domain not found",
-                    "no entries found",
-                    "no match"
+                    "no such domain", "no match for", "not found",
+                    "domain not found", "no entries found", "no match"
                 ];
-
                 const isTooShort = cleanOut.length < 50;
                 const hasFailureText = failurePhrases.some(p => cleanOut.includes(p));
 
@@ -110,21 +104,35 @@ function lookupLinux(query, server = null) {
 
 async function lookupDeep(query) {
     try {
-        const tld = query.split('.').pop();
-        const ianaRaw = await lookupLinux(tld, 'whois.iana.org');
-        const match = ianaRaw.match(/refer:\s*([^\s\n]+)/i);
+        const tld = query.split('.').pop().toLowerCase();
+        const MANUAL_SERVERS = {
+            'uk': 'whois.nic.uk', 'co': 'whois.nic.co', 'io': 'whois.nic.io',
+            'ai': 'whois.nic.ai', 'me': 'whois.nic.me', 'gov': 'whois.nic.gov',
+            'id': 'whois.pandi.or.id'
+        };
 
-        if (match && match[1]) {
-            const realServer = match[1];
-            try {
-                return await lookupLinux(query, realServer);
-            } catch (referralErr) {
-                return `[WARNING: Registry server ${realServer} is unreachable]\n[Showing IANA Registry Data:]\n\n${ianaRaw}`;
+        let realServer = MANUAL_SERVERS[tld];
+
+        if (!realServer) {
+            console.log(`[DEBUG] No override for .${tld}, asking IANA...`);
+            const ianaRaw = await lookupLinux(tld, 'whois.iana.org');
+            const match = ianaRaw.match(/refer:\s*([^\s\n]+)/i);
+
+            if (match && match[1]) {
+                realServer = match[1];
+            } else {
+                if (ianaRaw.length > 50) return ianaRaw;
+                throw new Error("No referral found in IANA response");
             }
         }
-        if (ianaRaw.length > 50) return ianaRaw;
-        throw new Error("No referral found");
-    } catch (e) { throw e; }
+
+        console.log(`[DEBUG] Deep Lookup for '${query}' at '${realServer}'`);
+        return await lookupLinux(query, realServer);
+
+    } catch (e) {
+        console.log(`[DEBUG] Deep Lookup Failed: ${e.message}`);
+        throw e;
+    }
 }
 
 async function lookupNPM(query) {
@@ -144,7 +152,7 @@ async function robustLookup(query) {
         try {
             if (detectQueryType(query) === 'domain') {
                 rawData = await lookupDeep(query);
-                methodUsed = 'Deep Discovery (IANA)';
+                methodUsed = 'Deep Discovery (IANA/Manual)';
             } else { throw new Error(); }
         } catch (err2) {
              try {
