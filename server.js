@@ -81,12 +81,25 @@ function lookupLinux(query, server = null) {
                 return reject(new Error("Network/DNS Error"));
             }
 
-            if (!server && (
-                output.toLowerCase().includes("no such domain") ||
-                output.toLowerCase().includes("no match for") ||
-                output.toLowerCase().includes("not found")
-            )) {
-                return reject(new Error("Possible false negative - triggering fallback"));
+            if (!server) {
+                const cleanOut = output.trim().toLowerCase();
+
+                const failurePhrases = [
+                    "no such domain",
+                    "no match for",
+                    "not found",
+                    "domain not found",
+                    "no entries found",
+                    "no match"
+                ];
+
+                const isTooShort = cleanOut.length < 50;
+                const hasFailureText = failurePhrases.some(p => cleanOut.includes(p));
+
+                if (isTooShort || hasFailureText) {
+                    console.log(`[DEBUG] Rejecting generic lookup for '${query}' (Length: ${cleanOut.length}, FailureText: ${hasFailureText}) -> Triggering Fallback`);
+                    return reject(new Error("Possible false negative - triggering fallback"));
+                }
             }
 
             if (error && output.length < 20) return reject(error);
