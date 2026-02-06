@@ -17,6 +17,10 @@ app.set('json spaces', 2);
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
+// In-Memory Cache - Stores results for 1 hour 
+const cache = new Map();
+const CACHE_DURATION = 60 * 60 * 1000; // 1 Hour
+
 app.use(express.static(path.join(__dirname, 'views'), { index: false }));
 
 // --- HELPERS ---
@@ -65,6 +69,7 @@ function lookupLinux(query, server = null) {
         if (!/^[a-zA-Z0-9.:-]+$/.test(query)) return reject(new Error("Invalid characters"));
 
         const args = [];
+        args.push('--verbose');
         if (server) {
             args.push('-h', server);
         }
@@ -72,7 +77,7 @@ function lookupLinux(query, server = null) {
 
         console.log(`[DEBUG] Executing: /usr/bin/whois ${args.join(' ')}`);
 
-        execFile('/usr/bin/whois', args, { timeout: 10000 }, (error, stdout, stderr) => {
+        execFile('/usr/bin/whois', args, { timeout: 15000 }, (error, stdout, stderr) => {
             const output = (stdout || '') + (stderr || '');
 
             if (output.includes("Name or service not known") ||
@@ -88,6 +93,7 @@ function lookupLinux(query, server = null) {
                     "no such domain", "no match for", "not found",
                     "domain not found", "no entries found", "no match"
                 ];
+                // 65 chars to catch short error messages
                 const isTooShort = cleanOut.length < 65;
                 const hasFailureText = failurePhrases.some(p => cleanOut.includes(p));
 
@@ -103,7 +109,7 @@ function lookupLinux(query, server = null) {
     });
 }
 
-// Helper to resolve hostname to IP (Bypasses container DNS)
+// Resolve hostname to IP to bypass container DNS issues
 async function resolveServerIP(hostname) {
     try {
         const ips = await dns.resolve4(hostname);
@@ -118,14 +124,16 @@ async function lookupDeep(query) {
     try {
         const cleanQuery = query.toLowerCase();
 
-        // Specific Suffix Overrides (Check these FIRST)
+        // 1. UK Gov/Academic Override (Jisc)
         if (cleanQuery.endsWith('.gov.uk') || cleanQuery.endsWith('.ac.uk')) {
-            console.log(`[DEBUG] Detected UK Public Sector domain. Routing to whois.ja.net...`);
+            console.log(`[DEBUG] Detected UK Public Sector. Routing to whois.ja.net...`);
             const serverIP = await resolveServerIP('whois.ja.net');
             return await lookupLinux(query, serverIP);
         }
 
         const tld = cleanQuery.split('.').pop();
+
+        // 2. Specific TLD Overrides
         const MANUAL_SERVERS = {
             'uk': 'whois.nic.uk', 'co': 'whois.nic.co', 'io': 'whois.nic.io',
             'ai': 'whois.nic.ai', 'me': 'whois.nic.me', 'gov': 'whois.nic.gov',
@@ -134,6 +142,7 @@ async function lookupDeep(query) {
 
         let realServer = MANUAL_SERVERS[tld];
 
+        // 3. IANA Fallback
         if (!realServer) {
             console.log(`[DEBUG] No override for .${tld}, asking IANA...`);
             const ianaRaw = await lookupLinux(tld, 'whois.iana.org');
@@ -165,19 +174,32 @@ async function lookupNPM(query) {
 
 // --- MASTER CONTROLLER ---
 async function robustLookup(query) {
+    // Check Cache First
+    if (cache.has(query)) {
+        const cached = cache.get(query);
+        if (Date.now() - cached.timestamp < CACHE_DURATION) {
+            console.log(`[DEBUG] Serving '${query}' from cache`);
+            return cached.data;
+        }
+        cache.delete(query);
+    }
+
     let rawData = null;
     let methodUsed = 'Linux Binary';
 
     try {
+        // Tier 1: Standard Lookup
         rawData = await lookupLinux(query);
     } catch (err1) {
         try {
+            // Tier 2: Deep Lookup
             if (detectQueryType(query) === 'domain') {
                 rawData = await lookupDeep(query);
                 methodUsed = 'Deep Discovery (IANA/Manual)';
             } else { throw new Error(); }
         } catch (err2) {
              try {
+                // Tier 3: NPM Fallback
                 console.log("[DEBUG] Tier 2 failed, trying NPM fallback...");
                 rawData = await lookupNPM(query);
                 methodUsed = 'NPM Library (Fallback)';
@@ -186,7 +208,15 @@ async function robustLookup(query) {
              }
         }
     }
-    return { rawData, methodUsed };
+
+    const result = { rawData, methodUsed };
+
+    // [NEW] Save to Cache (only if successful)
+    if (rawData && rawData.length > 50) {
+        cache.set(query, { timestamp: Date.now(), data: result });
+    }
+
+    return result;
 }
 
 // --- ROUTES ---
