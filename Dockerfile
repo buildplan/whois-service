@@ -10,13 +10,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dumb-init \
     && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p /staging/libs && \
+    cp /usr/lib/*-linux-gnu/libidn2.so.* /staging/libs/ && \
+    cp /usr/lib/*-linux-gnu/libunistring.so.* /staging/libs/
+
 # Install npm dependencies
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy app code
 COPY . .
-
 
 # === Final stage: Minimal runtime image ===
 FROM dhi.io/node:25
@@ -32,9 +35,8 @@ COPY --from=builder /usr/bin/dumb-init /usr/bin/dumb-init
 # Copy whois binary
 COPY --from=builder /usr/bin/whois /usr/bin/whois
 
-# Copy shared libraries
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libidn2.so.0 /usr/lib/x86_64-linux-gnu/libidn2.so.0
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libunistring.so.5 /usr/lib/x86_64-linux-gnu/libunistring.so.5
+# Copy the staged libraries to the system library path
+COPY --from=builder /staging/libs/ /usr/lib/
 
 # Copy netbase files
 COPY --from=builder /etc/protocols /etc/protocols
