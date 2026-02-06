@@ -34,7 +34,7 @@ COPY --from=builder /usr/bin/whois /usr/bin/whois
 
 # Copy shared libraries
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libidn2.so.0 /usr/lib/x86_64-linux-gnu/libidn2.so.0
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libunistring.so.2 /usr/lib/x86_64-linux-gnu/libunistring.so.2
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libunistring.so.5 /usr/lib/x86_64-linux-gnu/libunistring.so.5
 
 # Copy netbase files
 COPY --from=builder /etc/protocols /etc/protocols
