@@ -1,5 +1,5 @@
 const express = require('express');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const whois = require('whois');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
@@ -64,10 +64,15 @@ function lookupLinux(query, server = null) {
     return new Promise((resolve, reject) => {
         if (!/^[a-zA-Z0-9.:-]+$/.test(query)) return reject(new Error("Invalid characters"));
 
-        const cmd = server ? `whois -h ${server} "${query}"` : `whois "${query}"`;
-        console.log(`[DEBUG] Executing: ${cmd}`);
+        const args = [];
+        if (server) {
+            args.push('-h', server);
+        }
+        args.push(query);
 
-        exec(cmd, { timeout: 10000 }, (error, stdout, stderr) => {
+        console.log(`[DEBUG] Executing: /usr/bin/whois ${args.join(' ')}`);
+
+        execFile('/usr/bin/whois', args, { timeout: 10000 }, (error, stdout, stderr) => {
             const output = (stdout || '') + (stderr || '');
 
             if (output.includes("Name or service not known") ||
@@ -102,10 +107,10 @@ function lookupLinux(query, server = null) {
 async function resolveServerIP(hostname) {
     try {
         const ips = await dns.resolve4(hostname);
-        return ips[0]; // Return the first IP
+        return ips[0];
     } catch (e) {
         console.log(`[DEBUG] Failed to resolve WHOIS server ${hostname}: ${e.message}`);
-        return hostname; // Fallback to hostname if resolution fails
+        return hostname;
     }
 }
 
@@ -113,6 +118,7 @@ async function lookupDeep(query) {
     try {
         const cleanQuery = query.toLowerCase();
 
+        // Specific Suffix Overrides (Check these FIRST)
         if (cleanQuery.endsWith('.gov.uk') || cleanQuery.endsWith('.ac.uk')) {
             console.log(`[DEBUG] Detected UK Public Sector domain. Routing to whois.ja.net...`);
             const serverIP = await resolveServerIP('whois.ja.net');
@@ -121,8 +127,9 @@ async function lookupDeep(query) {
 
         const tld = cleanQuery.split('.').pop();
         const MANUAL_SERVERS = {
-            'uk': 'whois.nic.uk', 'co': 'whois.nic.co', 'io': 'whois.nic.io', 'ai': 'whois.nic.ai',
-            'me': 'whois.nic.me', 'gov': 'whois.nic.gov', 'id': 'whois.pandi.or.id', 'org': 'whois.publicinterestregistry.net'
+            'uk': 'whois.nic.uk', 'co': 'whois.nic.co', 'io': 'whois.nic.io',
+            'ai': 'whois.nic.ai', 'me': 'whois.nic.me', 'gov': 'whois.nic.gov',
+            'id': 'whois.pandi.or.id', 'org': 'whois.publicinterestregistry.net'
         };
 
         let realServer = MANUAL_SERVERS[tld];
@@ -141,7 +148,6 @@ async function lookupDeep(query) {
         }
 
         const serverIP = await resolveServerIP(realServer);
-
         console.log(`[DEBUG] Deep Lookup for '${query}' at '${realServer}' (${serverIP})`);
         return await lookupLinux(query, serverIP);
 
