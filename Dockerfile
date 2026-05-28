@@ -22,7 +22,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY . .
 
 # === Final stage: Minimal runtime image ===
-FROM dhi.io/node:25.9.0-debian13@sha256:f37508e9a4dbf5747921d8ce6825f9f833fab373f68d73291e5d47d311be08e9
+FROM dhi.io/node:25.9.0-debian13@sha256:f70e203139b1faba47ee6bdbdfd7b06b02dde4df537799856ee5bad31e19d9d4
 
 ENV NODE_ENV=production
 ENV PATH=/app/node_modules/.bin:$PATH
