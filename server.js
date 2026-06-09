@@ -17,7 +17,7 @@ app.set('json spaces', 2);
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-// In-Memory Cache - Stores results for 1 hour 
+// In-Memory Cache - Stores results for 1 hour
 const cache = new Map();
 const CACHE_DURATION = 60 * 60 * 1000; // 1 Hour
 
@@ -27,7 +27,7 @@ app.use(express.static(path.join(__dirname, 'views'), { index: false }));
 function isCli(userAgent) {
     const ua = (userAgent || '').toLowerCase();
     return ua.includes('curl') || ua.includes('wget') || ua.includes('httpie') ||
-           ua.includes('python') || ua.includes('powershell') || ua.includes('aiohttp') || ua.includes('go-http-client');
+        ua.includes('python') || ua.includes('powershell') || ua.includes('aiohttp') || ua.includes('go-http-client');
 }
 
 function detectQueryType(query) {
@@ -198,14 +198,14 @@ async function robustLookup(query) {
                 methodUsed = 'Deep Discovery (IANA/Manual)';
             } else { throw new Error(); }
         } catch (err2) {
-             try {
+            try {
                 // Tier 3: NPM Fallback
                 console.log("[DEBUG] Tier 2 failed, trying NPM fallback...");
                 rawData = await lookupNPM(query);
                 methodUsed = 'NPM Library (Fallback)';
-             } catch (err3) {
+            } catch (err3) {
                 return { rawData: null, methodUsed: 'Failed' };
-             }
+            }
         }
     }
 
@@ -219,9 +219,27 @@ async function robustLookup(query) {
     return result;
 }
 
+// --- RATE LIMITING ---
+const lookupLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50, // Limit each IP to 50 requests per 15 minutes
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res, next, options) => {
+        if (isCli(req.headers['user-agent'])) {
+            res.status(options.statusCode).send(`\n[ERROR] ${options.message.error}\n\n`);
+        } else {
+            res.status(options.statusCode).json(options.message);
+        }
+    },
+    message: { error: "Too many WHOIS requests from this IP. Please try again after 15 minutes." }
+});
+
 // --- ROUTES ---
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
 app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, 'views', 'terms.html')));
+
+app.use('/api/lookup', lookupLimiter);
 
 app.get('/api/lookup/:query', async (req, res) => {
     const query = req.params.query;
@@ -276,8 +294,10 @@ app.get('/api/lookup/:query', async (req, res) => {
 });
 
 // CLI Text Report
-app.get('/:query', async (req, res, next) => {
+app.get('/:query', (req, res, next) => {
     if (detectQueryType(req.params.query) === 'unknown') return next();
+    lookupLimiter(req, res, next);
+}, async (req, res, next) => {
     const ua = req.headers['user-agent'];
     if (isCli(ua)) {
         const query = req.params.query;
@@ -292,7 +312,7 @@ app.get('/:query', async (req, res, next) => {
         if (ipInfo) {
             output += `Location: ${ipInfo.city}, ${ipInfo.country}\n`;
             output += `Provider: ${ipInfo.org} (${ipInfo.asn})\n`;
-            if(ipInfo.is_proxy) output += `SECURITY WARNING: Identified as ${ipInfo.proxy_type}\n`;
+            if (ipInfo.is_proxy) output += `SECURITY WARNING: Identified as ${ipInfo.proxy_type}\n`;
             output += `------------------------------------------------\n`;
         }
         if (dnsResult) {
