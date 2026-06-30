@@ -1,5 +1,5 @@
 # === Build stage: Install system packages and dependencies ===
-FROM dhi.io/node:26.4.0-debian13-dev@sha256:483b0f406ee79be9b299335437220cd8ed99bfeba21735af016b2bf26496fe71 AS builder
+FROM dhi.io/node:26.4.0-debian13-dev@sha256:67bf1ffb373790c6bbab07f3c89d3bff9b5826eb83c7f89860f9b33e722ab661 AS builder
 
 WORKDIR /usr/src/app
 
