@@ -175,15 +175,32 @@
 
         <div id="results" class="hidden space-y-6">
 
-            <div id="domain-info-cards" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="domain-info-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="glass-panel p-5 rounded-xl space-y-2">
                     <div class="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider">Registrar</div>
                     <div id="res-registrar" class="text-slate-800 dark:text-white font-mono text-sm truncate">...</div>
                 </div>
                 <div class="glass-panel p-5 rounded-xl space-y-2">
-                    <div class="text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider">Expiry Date</div>
-                    <div id="res-expires" class="text-slate-800 dark:text-white font-mono text-sm">...</div>
+                    <div class="text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider">Created Date</div>
+                    <div id="res-created" class="text-slate-800 dark:text-white font-mono text-sm truncate">...</div>
                 </div>
+                <div class="glass-panel p-5 rounded-xl space-y-2">
+                    <div class="text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-wider">Expiry Date</div>
+                    <div id="res-expires" class="text-slate-800 dark:text-white font-mono text-sm truncate">...</div>
+                </div>
+                <div class="glass-panel p-5 rounded-xl space-y-2">
+                    <div class="text-purple-600 dark:text-purple-400 text-xs font-bold uppercase tracking-wider">Updated Date</div>
+                    <div id="res-updated" class="text-slate-800 dark:text-white font-mono text-sm truncate">...</div>
+                </div>
+            </div>
+
+            <div id="nameservers-container" class="glass-panel p-6 rounded-xl space-y-3 hidden">
+                <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700/50 pb-3">
+                    <div class="text-orange-600 dark:text-orange-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                        Nameservers
+                    </div>
+                </div>
+                <div id="res-nameservers" class="grid grid-cols-1 md:grid-cols-2 gap-2 font-mono text-sm text-slate-700 dark:text-slate-300"></div>
             </div>
 
             <div id="ip-intelligence" class="glass-panel p-6 rounded-xl space-y-4 hidden">
@@ -394,10 +411,12 @@
             const ipv4Section = document.getElementById('ipv4-section');
             const ipv6Section = document.getElementById('ipv6-section');
             const searchBtn = document.getElementById('searchBtn');
+            const nsContainer = document.getElementById('nameservers-container');
             
             // Reset UI
             results.classList.add('hidden');
             errorMsg.classList.add('hidden');
+            if(nsContainer) nsContainer.classList.add('hidden');
             dnsContainer.classList.add('hidden');
             ipv4Section.classList.add('hidden');
             ipv6Section.classList.add('hidden');
@@ -442,7 +461,24 @@
                     // SHOW DOMAIN CARDS
                     domainCards.classList.remove('hidden');
                     document.getElementById('res-registrar').innerText = data.parsed.registrar || 'Check Raw Output';
+                    document.getElementById('res-created').innerText = data.parsed.created || 'Check Raw Output';
                     document.getElementById('res-expires').innerText = data.parsed.expires || 'Check Raw Output';
+                    document.getElementById('res-updated').innerText = data.parsed.updated || 'Check Raw Output';
+                    
+                    const nsContainer = document.getElementById('nameservers-container');
+                    const nsList = document.getElementById('res-nameservers');
+                    nsList.innerHTML = '';
+                    if (data.parsed.nameservers && data.parsed.nameservers.length > 0) {
+                        nsContainer.classList.remove('hidden');
+                        data.parsed.nameservers.forEach(ns => {
+                            const d = document.createElement('div');
+                            d.className = 'bg-slate-100 dark:bg-slate-800/50 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700/50 truncate';
+                            d.innerText = ns;
+                            nsList.appendChild(d);
+                        });
+                    } else {
+                        nsContainer.classList.add('hidden');
+                    }
 
                     // SHOW RESOLVED IPs
                     let hasIPs = false;

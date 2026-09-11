@@ -109,6 +109,67 @@ function lookupLinux(query, server = null) {
     });
 }
 
+// --- RDAP INTEGRATION ---
+async function lookupRDAP(query) {
+    // Global Bootstrap for all TLDs
+    const rdapUrl = `https://rdap.org/domain/${query}`;
+    const response = await fetch(rdapUrl, {
+        headers: { 'Accept': 'application/rdap+json', 'User-Agent': 'whois-service/1.0' },
+        signal: AbortSignal.timeout(10000)
+    });
+    
+    if (!response.ok) {
+        throw new Error(`RDAP request failed with status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Convert RDAP JSON to a WHOIS-like text string for compatibility
+    let text = `Domain Name: ${data.ldhName || query}\n`;
+    
+    if (data.events) {
+        for (const event of data.events) {
+            if (event.eventAction === 'registration') {
+                text += `Creation Date: ${event.eventDate}\n`;
+            } else if (event.eventAction === 'expiration') {
+                text += `Registry Expiry Date: ${event.eventDate}\n`;
+            } else if (event.eventAction === 'last changed') {
+                text += `Updated Date: ${event.eventDate}\n`;
+            }
+        }
+    }
+    
+    if (data.entities) {
+        for (const entity of data.entities) {
+            if (entity.roles && entity.roles.includes('registrar')) {
+                if (entity.vcardArray && Array.isArray(entity.vcardArray[1])) {
+                    const orgNode = entity.vcardArray[1].find(item => item[0] === 'org');
+                    const fnNode = entity.vcardArray[1].find(item => item[0] === 'fn');
+                    if (orgNode && orgNode[3]) {
+                        text += `Registrar: ${orgNode[3]}\n`;
+                    } else if (fnNode && fnNode[3]) {
+                        text += `Registrar: ${fnNode[3]}\n`;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (data.nameservers) {
+        for (const ns of data.nameservers) {
+            text += `Name Server: ${ns.ldhName}\n`;
+        }
+    }
+    
+    if (data.status) {
+        for (const status of data.status) {
+            text += `Domain Status: ${status}\n`;
+        }
+    }
+    
+    return text + `\n>>> Data retrieved via RDAP Protocol <<<\n`;
+}
+
 // Resolve hostname to IP to bypass container DNS issues
 async function resolveServerIP(hostname) {
     try {
@@ -185,27 +246,43 @@ async function robustLookup(query) {
     }
 
     let rawData = null;
-    let methodUsed = 'Linux Binary';
+    let methodUsed = '';
+    const qType = detectQueryType(query);
 
-    try {
-        // Tier 1: Standard Lookup
-        rawData = await lookupLinux(query);
-    } catch (err1) {
+    if (qType === 'domain') {
+        // Modern Future-Proof Strategy for Domains
         try {
-            // Tier 2: Deep Lookup
-            if (detectQueryType(query) === 'domain') {
-                rawData = await lookupDeep(query);
-                methodUsed = 'Deep Discovery (IANA/Manual)';
-            } else { throw new Error(); }
-        } catch (err2) {
+            console.log(`[DEBUG] Tier 1: Modern RDAP Lookup...`);
+            rawData = await lookupRDAP(query);
+            methodUsed = 'RDAP Protocol';
+        } catch (errRdap) {
+            console.log(`[DEBUG] RDAP failed (${errRdap.message}), trying Legacy Linux WHOIS...`);
             try {
-                // Tier 3: NPM Fallback
-                console.log("[DEBUG] Tier 2 failed, trying NPM fallback...");
-                rawData = await lookupNPM(query);
-                methodUsed = 'NPM Library (Fallback)';
-            } catch (err3) {
-                return { rawData: null, methodUsed: 'Failed' };
+                rawData = await lookupLinux(query);
+                methodUsed = 'Linux Binary (Legacy)';
+            } catch (errLinux) {
+                console.log(`[DEBUG] Legacy WHOIS failed, trying Deep Discovery...`);
+                try {
+                    rawData = await lookupDeep(query);
+                    methodUsed = 'Deep Discovery (IANA/Manual)';
+                } catch (errDeep) {
+                    console.log(`[DEBUG] Deep Discovery failed, trying NPM Fallback...`);
+                    try {
+                        rawData = await lookupNPM(query);
+                        methodUsed = 'NPM Library (Fallback)';
+                    } catch (errNpm) {
+                        return { rawData: null, methodUsed: 'Failed' };
+                    }
+                }
             }
+        }
+    } else {
+        // IP / ASN Strategy
+        try {
+            rawData = await lookupLinux(query);
+            methodUsed = 'Linux Binary';
+        } catch (err1) {
+            return { rawData: null, methodUsed: 'Failed' };
         }
     }
 
