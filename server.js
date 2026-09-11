@@ -100,7 +100,7 @@ function lookupLinux(query, server = null) {
 
                 if (isTooShort || hasFailureText) {
                     console.log(`[DEBUG] Tier 1 Reject: '${query}' (Len: ${cleanOut.length})`);
-                    return reject(new Error("Possible false negative - triggering fallback"));
+                    return reject(new Error(`FALLBACK_TRIGGERED|||${output}`));
                 }
             }
 
@@ -120,7 +120,7 @@ async function lookupRDAP(query) {
     });
     
     if (response.status === 404) {
-        return `Domain Name: ${query}\nDomain Status: No match found (Available)\n\n>>> Data retrieved via RDAP Protocol <<<\n`;
+        throw new Error('RDAP_404');
     }
 
     if (!response.ok) {
@@ -266,17 +266,23 @@ async function robustLookup(query) {
                 rawData = await lookupLinux(query);
                 methodUsed = 'Linux Binary (Legacy)';
             } catch (errLinux) {
-                console.log(`[DEBUG] Legacy WHOIS failed, trying Deep Discovery...`);
-                try {
-                    rawData = await lookupDeep(query);
-                    methodUsed = 'Deep Discovery (IANA/Manual)';
-                } catch (errDeep) {
-                    console.log(`[DEBUG] Deep Discovery failed, trying NPM Fallback...`);
+                if (errRdap.message === 'RDAP_404' && errLinux.message.includes('FALLBACK_TRIGGERED|||')) {
+                    console.log(`[DEBUG] Consensus reached: Both RDAP and Legacy say domain is missing.`);
+                    rawData = errLinux.message.split('FALLBACK_TRIGGERED|||')[1];
+                    methodUsed = 'Linux Binary (Legacy)';
+                } else {
+                    console.log(`[DEBUG] Legacy WHOIS failed, trying Deep Discovery...`);
                     try {
-                        rawData = await lookupNPM(query);
-                        methodUsed = 'NPM Library (Fallback)';
-                    } catch (errNpm) {
-                        return { rawData: null, methodUsed: 'Failed' };
+                        rawData = await lookupDeep(query);
+                        methodUsed = 'Deep Discovery (IANA/Manual)';
+                    } catch (errDeep) {
+                        console.log(`[DEBUG] Deep Discovery failed, trying NPM Fallback...`);
+                        try {
+                            rawData = await lookupNPM(query);
+                            methodUsed = 'NPM Library (Fallback)';
+                        } catch (errNpm) {
+                            return { rawData: null, methodUsed: 'Failed' };
+                        }
                     }
                 }
             }
