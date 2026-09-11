@@ -5,6 +5,7 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const util = require('util');
 const dns = require('dns').promises;
+require('dns').setDefaultResultOrder('ipv4first');
 
 // Force Node.js to use reliable upstream DNS
 dns.setServers(['1.1.1.1', "9.9.9.9", "208.67.222.222", "8.8.8.8"]);
@@ -118,6 +119,10 @@ async function lookupRDAP(query) {
         signal: AbortSignal.timeout(10000)
     });
     
+    if (response.status === 404) {
+        return `Domain Name: ${query}\nDomain Status: No match found (Available)\n\n>>> Data retrieved via RDAP Protocol <<<\n`;
+    }
+
     if (!response.ok) {
         throw new Error(`RDAP request failed with status: ${response.status}`);
     }
