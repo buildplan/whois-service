@@ -1,5 +1,5 @@
 # === Build stage: Install system packages and dependencies ===
-FROM dhi.io/node:26.8.2-debian13-dev@sha256:78ce3a9a15da054a721e2635b20ac8ab344451b1871b27415f54c58e65a87eb1 AS builder
+FROM dhi.io/node:26.9.0-debian13-dev@sha256:96edc33ef481be918701de73aaedf073b7d6bc133b3a5637dc334fb5144e7a38 AS builder
 
 WORKDIR /usr/src/app
 
@@ -22,7 +22,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY . .
 
 # === Final stage: Minimal runtime image ===
-FROM dhi.io/node:26.8.2-debian13@sha256:523343ea122e647ef0d1371c85055b113df63fb8c07395d80c9126a9aa157826
+FROM dhi.io/node:26.9.0-debian13@sha256:ff1fdb348b9ca312f78d78f7c2af6930f5f7948edea0bbcd3c20e84db7b12eeb
 
 ENV NODE_ENV=production
 ENV PATH=/app/node_modules/.bin:$PATH
